@@ -1,0 +1,68 @@
+import telebot
+import smtplib
+import pandas as pd
+from email.mime.text import MIMEText
+
+BOT_TOKEN = "YOUR_BOT_TOKEN"
+
+EMAIL = "youremail@gmail.com"
+PASSWORD = "YOUR_APP_PASSWORD"
+
+bot = telebot.TeleBot(BOT_TOKEN)
+
+email_list = []
+message_text = ""
+
+@bot.message_handler(commands=['start'])
+def start(msg):
+    bot.reply_to(msg, "Bot Ready ✅")
+
+@bot.message_handler(commands=['setmessage'])
+def setmsg(msg):
+    global message_text
+    text = msg.text.replace('/setmessage ', '')
+    message_text = text
+    bot.reply_to(msg, "Message Saved ✅")
+
+@bot.message_handler(content_types=['document'])
+def file_handler(message):
+    global email_list
+
+    file_info = bot.get_file(message.document.file_id)
+    downloaded_file = bot.download_file(file_info.file_path)
+
+    with open("emails.txt", 'wb') as new_file:
+        new_file.write(downloaded_file)
+
+    with open("emails.txt", "r") as f:
+        email_list = [line.strip() for line in f.readlines()]
+
+    bot.reply_to(message, f"{len(email_list)} Emails Loaded ✅")
+
+@bot.message_handler(commands=['sendall'])
+def send_all(msg):
+
+    sent = 0
+
+    server = smtplib.SMTP('smtp.gmail.com', 587)
+    server.starttls()
+    server.login(EMAIL, PASSWORD)
+
+    for user_email in email_list:
+        try:
+            email_msg = MIMEText(message_text)
+            email_msg['Subject'] = "Notification"
+            email_msg['From'] = EMAIL
+            email_msg['To'] = user_email
+
+            server.sendmail(EMAIL, user_email, email_msg.as_string())
+            sent += 1
+
+        except Exception as e:
+            print(e)
+
+    server.quit()
+
+    bot.reply_to(msg, f"{sent} Emails Sent ✅")
+
+bot.infinity_polling()
